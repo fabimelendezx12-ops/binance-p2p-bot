@@ -54,14 +54,19 @@ def formatear(anuncios, trade_type):
     maximo = max(precios)
     promedio = sum(precios) / len(precios)
 
-    titulo = "🟢 *Compradores de USDT*" if trade_type == "BUY" else "🔴 *Vendedores de USDT*"
+    titulo = "🟢 *Top Compradores de USDT*" if trade_type == "BUY" else "🔴 *Top Vendedores de USDT*"
     lineas = [f"{titulo}\n", "━━━━━━━━━━━━━━━━━━━━━━━"]
 
     for i, adv in enumerate(anuncios, start=1):
         a = adv["adv"]
         u = adv["advertiser"]
+
         precio = a.get("price", "N/A")
         usuario = u.get("nickName", "Desconocido")
+
+        # ✅ Verificación del comerciante
+        verificado = "✅" if u.get("userType") == "merchant" else "⚪"
+
         min_limit = a.get("minSingleTransAmount", "?")
         max_limit = a.get("maxSingleTransAmount", "?")
 
@@ -73,49 +78,65 @@ def formatear(anuncios, trade_type):
         ]
 
         lineas.append(
-            f"*{i}. {usuario}*\n"
-            f"💵 Precio: *{precio} Bs*\n"
-            f"📉 Límite: {min_limit} - {max_limit}\n"
-            f"🏦 Métodos: {', '.join(methods) if methods else 'No especificado'}\n"
+            f"*{i}. {usuario} {verificado}*\n"
+            f"💵 *Precio:* {precio} Bs\n"
+            f"📉 *Límite:* {min_limit} - {max_limit}\n"
+            f"🏦 *Métodos:* {', '.join(methods) if methods else 'No especificado'}\n"
             "━━━━━━━━━━━━━━━━━━━━━━━"
         )
 
     # Estadísticas
     lineas.append(
         f"📊 *Estadísticas del mercado:*\n"
-        f"▫️ Mínimo: {minimo}\n"
-        f"▫️ Máximo: {maximo}\n"
-        f"▫️ Promedio: {promedio:.2f}"
+        f"▫️ *Mínimo:* {minimo}\n"
+        f"▫️ *Máximo:* {maximo}\n"
+        f"▫️ *Promedio:* {promedio:.2f}"
     )
 
     return "\n".join(lineas)
 
+def calcular_promedio(anuncios):
+    precios = [float(a["adv"]["price"]) for a in anuncios if a["adv"].get("price")]
+    if not precios:
+        return "⚠️ No se pudieron obtener precios."
+    promedio = sum(precios) / len(precios)
+    return f"📊 *Promedio de los primeros {len(precios)} anuncios:* {promedio:.2f} Bs"
+
 # === HANDLERS ===
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
-        "👋 ¡Bienvenido al *Bot P2P de Binance*!\n\n"
+        "👋 Bienvenido al *Bot P2P de Binance*!\n\n"
         "📌 *Comandos disponibles:*\n"
-        "• /p2pbuy → Ver *compradores* de USDT en VES\n"
-        "• /p2psell → Ver *vendedores* de USDT en VES\n"
-        "• /help → Mostrar esta ayuda\n\n"
+        "• `/p2pbuy [n]` → Ver *compradores* de USDT (por defecto 10, puedes poner 20, 30...)\n"
+        "• `/p2psell [n]` → Ver *vendedores* de USDT (igual, puedes elegir cantidad)\n"
+        "• `/p2pavg` → Ver solo el *promedio* de los primeros 20 anuncios\n"
+        "• `/help` → Mostrar esta ayuda\n\n"
         "⚡ Datos en tiempo real desde Binance P2P"
     )
     await update.message.reply_text(msg, parse_mode="Markdown")
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "ℹ️ Usa `/p2pbuy` o `/p2psell` para consultar el mercado en tiempo real.\n"
-        "Ejemplo: `/p2pbuy`",
+        "ℹ️ Usa `/p2pbuy 20` o `/p2psell 30` para consultar más anuncios.\n"
+        "Ejemplo: `/p2pbuy 15`\n\n"
+        "Para ver solo el promedio: `/p2pavg`",
         parse_mode="Markdown"
     )
 
 async def p2pbuy(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    anuncios = obtener_anuncios("BUY")
+    # Leer cantidad opcional
+    rows = int(context.args[0]) if context.args else 10
+    anuncios = obtener_anuncios("BUY", rows)
     await update.message.reply_text(formatear(anuncios, "BUY"), parse_mode="Markdown")
 
 async def p2psell(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    anuncios = obtener_anuncios("SELL")
+    rows = int(context.args[0]) if context.args else 10
+    anuncios = obtener_anuncios("SELL", rows)
     await update.message.reply_text(formatear(anuncios, "SELL"), parse_mode="Markdown")
+
+async def p2pavg(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    anuncios = obtener_anuncios("BUY", 20)  # fijo en 20
+    await update.message.reply_text(calcular_promedio(anuncios), parse_mode="Markdown")
 
 # === MAIN ===
 def main():
@@ -128,6 +149,7 @@ def main():
     app.add_handler(CommandHandler("help", help_cmd))
     app.add_handler(CommandHandler("p2pbuy", p2pbuy))
     app.add_handler(CommandHandler("p2psell", p2psell))
+    app.add_handler(CommandHandler("p2pavg", p2pavg))
 
     print("🤖 Bot corriendo en Telegram...")
     app.run_polling()
