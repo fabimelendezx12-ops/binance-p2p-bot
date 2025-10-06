@@ -49,30 +49,44 @@ def obtener_anuncios(trade_type: str, rows: int = 10, fiat: str = "VES"):
     return data
 
 def formatear(anuncios, trade_type):
-    precios = [float(a["adv"]["price"]) for a in anuncios]
+    precios = [float(a["adv"]["price"]) for a in anuncios if a["adv"].get("price")]
     minimo = min(precios)
     maximo = max(precios)
     promedio = sum(precios) / len(precios)
 
-    lineas = [f"*🔹 Top anuncios P2P (USDT → VES, {trade_type})*", ""]
+    titulo = "🟢 *Compradores de USDT*" if trade_type == "BUY" else "🔴 *Vendedores de USDT*"
+    lineas = [f"{titulo}\n", "━━━━━━━━━━━━━━━━━━━━━━━"]
+
     for i, adv in enumerate(anuncios, start=1):
         a = adv["adv"]
         u = adv["advertiser"]
-        precio = a["price"]
-        usuario = u["nickName"]
-        min_limit = a["minSingleTransAmount"]
-        max_limit = a["maxSingleTransAmount"]
-        methods = [m["tradeMethodName"] for m in a["tradeMethods"]]
+        precio = a.get("price", "N/A")
+        usuario = u.get("nickName", "Desconocido")
+        min_limit = a.get("minSingleTransAmount", "?")
+        max_limit = a.get("maxSingleTransAmount", "?")
+
+        # Filtrar métodos None
+        methods = [
+            str(m.get("tradeMethodName", "Desconocido"))
+            for m in a.get("tradeMethods", [])
+            if m.get("tradeMethodName")
+        ]
+
         lineas.append(
-            f"*{i}. {usuario}* | 💵 {precio} Bs\n"
-            f"   Límite: {min_limit}-{max_limit}\n"
-            f"   Métodos: {', '.join(methods)}"
+            f"*{i}. {usuario}*\n"
+            f"💵 Precio: *{precio} Bs*\n"
+            f"📉 Límite: {min_limit} - {max_limit}\n"
+            f"🏦 Métodos: {', '.join(methods) if methods else 'No especificado'}\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━"
         )
 
-    lineas.append("\n📊 *Estadísticas:*")
-    lineas.append(f"• Mínimo: {minimo}")
-    lineas.append(f"• Máximo: {maximo}")
-    lineas.append(f"• Promedio: {promedio:.2f}")
+    # Estadísticas
+    lineas.append(
+        f"📊 *Estadísticas del mercado:*\n"
+        f"▫️ Mínimo: {minimo}\n"
+        f"▫️ Máximo: {maximo}\n"
+        f"▫️ Promedio: {promedio:.2f}"
+    )
 
     return "\n".join(lineas)
 
@@ -80,16 +94,17 @@ def formatear(anuncios, trade_type):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
         "👋 ¡Bienvenido al *Bot P2P de Binance*!\n\n"
-        "Comandos disponibles:\n"
-        "• /p2pbuy → Ver anuncios de compra (quién compra USDT en VES)\n"
-        "• /p2psell → Ver anuncios de venta (quién vende USDT en VES)\n"
-        "• /help → Mostrar esta ayuda"
+        "📌 *Comandos disponibles:*\n"
+        "• /p2pbuy → Ver *compradores* de USDT en VES\n"
+        "• /p2psell → Ver *vendedores* de USDT en VES\n"
+        "• /help → Mostrar esta ayuda\n\n"
+        "⚡ Datos en tiempo real desde Binance P2P"
     )
     await update.message.reply_text(msg, parse_mode="Markdown")
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "ℹ️ Usa /p2pbuy o /p2psell para consultar el mercado en tiempo real.\n"
+        "ℹ️ Usa `/p2pbuy` o `/p2psell` para consultar el mercado en tiempo real.\n"
         "Ejemplo: `/p2pbuy`",
         parse_mode="Markdown"
     )
